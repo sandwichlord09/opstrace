@@ -32,25 +32,6 @@ export type RegisterUserInput = z.infer<typeof RegisterUserSchema>;
 // Operations & Receiving Schemas
 // ============================================================================
 
-export const GoodsReceiptItemInputSchema = z.object({
-  purchaseOrderItemId: z.string().uuid(),
-  productId: z.string().uuid(),
-  receivedQuantity: z.number().int().nonnegative('Received quantity must be non-negative'),
-  damagedQuantity: z.number().int().nonnegative('Damaged quantity must be non-negative').default(0),
-  notes: z.string().max(1000).optional(),
-});
-
-export const SubmitGoodsReceiptSchema = z.object({
-  purchaseOrderId: z.string().uuid(),
-  warehouseId: z.string().uuid(),
-  receiptNumber: z.string().min(1, 'Receipt number is required'),
-  receivedAt: z.coerce.date().default(() => new Date()),
-  items: z.array(GoodsReceiptItemInputSchema).min(1, 'At least one item must be received'),
-  idempotencyKey: z.string().uuid('Idempotency key must be a valid UUID'),
-});
-
-export type SubmitGoodsReceiptInput = z.infer<typeof SubmitGoodsReceiptSchema>;
-
 // ============================================================================
 // Stock Inspection Schemas
 // ============================================================================
@@ -92,6 +73,47 @@ export const BasePaginationQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().trim().max(100).optional(),
 });
+
+// ============================================================================
+// Operations & Receiving Schemas
+// ============================================================================
+
+export const GoodsReceiptItemInputSchema = z
+  .object({
+    purchaseOrderItemId: z.string().uuid('purchaseOrderItemId must be a valid UUID'),
+    productId: z.string().uuid('productId must be a valid UUID'),
+    receivedQuantity: z.number().int().nonnegative('Received quantity must be non-negative'),
+    damagedQuantity: z
+      .number()
+      .int()
+      .nonnegative('Damaged quantity must be non-negative')
+      .default(0),
+    conditionNotes: z.string().max(1000).optional(),
+  })
+  .refine((data) => data.damagedQuantity <= data.receivedQuantity, {
+    message: 'damagedQuantity cannot exceed receivedQuantity',
+    path: ['damagedQuantity'],
+  });
+
+export const SubmitGoodsReceiptSchema = z.object({
+  purchaseOrderId: z.string().uuid('purchaseOrderId must be a valid UUID'),
+  warehouseId: z.string().uuid('warehouseId must be a valid UUID'),
+  receiptNumber: z.string().min(1, 'Receipt number is required').max(100),
+  receivedAt: z.coerce.date().default(() => new Date()),
+  notes: z.string().max(2000).optional(),
+  items: z.array(GoodsReceiptItemInputSchema).min(1, 'At least one item must be received'),
+  idempotencyKey: z.string().uuid('Idempotency key must be a valid UUID'),
+});
+
+export type SubmitGoodsReceiptInput = z.infer<typeof SubmitGoodsReceiptSchema>;
+
+export const GoodsReceiptQuerySchema = BasePaginationQuerySchema.extend({
+  purchaseOrderId: z.string().uuid().optional(),
+  warehouseId: z.string().uuid().optional(),
+  status: z.enum(['IN_PROGRESS', 'SUBMITTED', 'RECONCILED']).optional(),
+});
+
+export type GoodsReceiptQueryInput = z.infer<typeof GoodsReceiptQuerySchema>;
 
 // ============================================================================
 // Warehouse Schemas

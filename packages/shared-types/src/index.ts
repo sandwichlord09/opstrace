@@ -270,6 +270,70 @@ export interface PurchaseOrderDto {
   summary?: PurchaseOrderSummaryMetrics;
 }
 
+// ============================================================================
+// Goods Receipts & Reconciliation Interfaces
+// ============================================================================
+
+export interface GoodsReceiptItemDto {
+  id: string;
+  goodsReceiptId: string;
+  purchaseOrderItemId: string;
+  productId: string;
+  receivedQuantity: number;
+  damagedQuantity: number;
+  /** Derived field: receivedQuantity - damagedQuantity */
+  acceptedQuantity: number;
+  conditionNotes: string | null;
+}
+
+export interface GoodsReceiptDto {
+  id: string;
+  organizationId: string;
+  purchaseOrderId: string;
+  warehouseId: string;
+  receivedBy: string;
+  receiptNumber: string;
+  status: GoodsReceiptStatus | string;
+  receivedAt: Date | string;
+  submittedAt: Date | string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  items?: GoodsReceiptItemDto[];
+}
+
+/** Per-line aggregated metrics computed by the ReconciliationEngine. */
+export interface LineReconciliationMetric {
+  purchaseOrderItemId: string;
+  productId: string;
+  orderedQuantity: number;
+  totalReceivedQuantity: number;
+  totalDamagedQuantity: number;
+  /** receivedQuantity - damagedQuantity aggregated across all receipts */
+  totalAcceptedQuantity: number;
+  /** max(0, orderedQuantity - totalAcceptedQuantity) */
+  outstandingQuantity: number;
+}
+
+/** An exception to be persisted when the engine detects a discrepancy. */
+export interface ReconciliationException {
+  category: ExceptionCategory;
+  severity: ExceptionSeverity;
+  purchaseOrderItemId?: string;
+  productId?: string;
+  title: string;
+  description: string;
+}
+
+/** Full output of the ReconciliationEngine for a given goods receipt submission. */
+export interface ReconciliationResult {
+  /** The recommended new PO status after this round of receiving. */
+  poStatus: PurchaseOrderStatus;
+  /** Zero or more exceptions that must be persisted for this delivery. */
+  exceptions: ReconciliationException[];
+  /** Per-line metrics for inventory snapshot upserts and audit. */
+  lineMetrics: LineReconciliationMetric[];
+}
+
 export interface ImportJobRowError {
   rowNumber: number;
   poNumber?: string;

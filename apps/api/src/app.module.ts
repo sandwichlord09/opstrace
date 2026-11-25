@@ -7,6 +7,7 @@ import { ProductsModule } from './products/products.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { ImportsModule } from './imports/imports.module';
+import { GoodsReceiptsModule } from './goods-receipts/goods-receipts.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { ImportsModule } from './imports/imports.module';
     SuppliersModule,
     PurchaseOrdersModule,
     ImportsModule.register(),
+    GoodsReceiptsModule,
   ],
 })
 export class AppModule {}
