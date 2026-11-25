@@ -1,13 +1,5 @@
 import { z } from 'zod';
-import {
-  ExceptionCategory,
-  ExceptionSeverity,
-  PurchaseOrderStatus,
-  GoodsReceiptStatus,
-  StockInspectionStatus,
-  ResolutionType,
-  SyncOperationType,
-} from '@opstrace/shared-types';
+import { ResolutionType } from '@opstrace/shared-types';
 
 // ============================================================================
 // Auth & Identity Validation Schemas
