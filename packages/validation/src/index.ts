@@ -1,8 +1,13 @@
 import { z } from 'zod';
 import {
+  AuditAction,
+  ExceptionCategory,
+  ExceptionSeverity,
+  ExceptionStatus,
   ProductStatus,
   PurchaseOrderStatus,
   ResolutionType,
+  StockInspectionStatus,
   SupplierStatus,
   WarehouseStatus,
 } from '@opstrace/shared-types';
@@ -52,12 +57,25 @@ export type SubmitStockInspectionInput = z.infer<typeof SubmitStockInspectionSch
 // ============================================================================
 
 export const AssignExceptionSchema = z.object({
-  assignedToUserId: z.string().uuid(),
+  assignedToUserId: z.string().uuid('assignedToUserId must be a valid UUID'),
 });
 
 export type AssignExceptionInput = z.infer<typeof AssignExceptionSchema>;
 
+export const AddExceptionCommentSchema = z.object({
+  content: z
+    .string()
+    .trim()
+    .min(1, 'Comment content is required')
+    .max(2000, 'Comment cannot exceed 2000 characters'),
+});
+
+export type AddExceptionCommentInput = z.infer<typeof AddExceptionCommentSchema>;
+
 export const ResolveExceptionSchema = z.object({
+  status: z
+    .enum([ExceptionStatus.RESOLVED, ExceptionStatus.DISMISSED])
+    .default(ExceptionStatus.RESOLVED),
   resolutionType: z.nativeEnum(ResolutionType),
   resolutionNotes: z.string().min(5, 'Resolution notes must be at least 5 characters').max(2000),
 });
@@ -73,6 +91,35 @@ export const BasePaginationQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().trim().max(100).optional(),
 });
+
+export const ExceptionQuerySchema = BasePaginationQuerySchema.extend({
+  status: z.nativeEnum(ExceptionStatus).optional(),
+  severity: z.nativeEnum(ExceptionSeverity).optional(),
+  type: z.nativeEnum(ExceptionCategory).optional(),
+  warehouseId: z.string().uuid().optional(),
+  assignedToUserId: z.string().uuid().optional(),
+});
+
+export type ExceptionQueryInput = z.infer<typeof ExceptionQuerySchema>;
+
+export const StockInspectionQuerySchema = BasePaginationQuerySchema.extend({
+  warehouseId: z.string().uuid().optional(),
+  productId: z.string().uuid().optional(),
+  status: z.nativeEnum(StockInspectionStatus).optional(),
+});
+
+export type StockInspectionQueryInput = z.infer<typeof StockInspectionQuerySchema>;
+
+export const AuditLogQuerySchema = BasePaginationQuerySchema.extend({
+  entityType: z.string().trim().max(50).optional(),
+  entityId: z.string().uuid().optional(),
+  actorUserId: z.string().uuid().optional(),
+  action: z.nativeEnum(AuditAction).optional(),
+  fromDate: z.coerce.date().optional(),
+  toDate: z.coerce.date().optional(),
+});
+
+export type AuditLogQueryInput = z.infer<typeof AuditLogQuerySchema>;
 
 // ============================================================================
 // Operations & Receiving Schemas

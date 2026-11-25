@@ -8,6 +8,9 @@ import { SuppliersModule } from './suppliers/suppliers.module';
 import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { ImportsModule } from './imports/imports.module';
 import { GoodsReceiptsModule } from './goods-receipts/goods-receipts.module';
+import { ExceptionsModule } from './exceptions/exceptions.module';
+import { StockInspectionsModule } from './stock-inspections/stock-inspections.module';
+import { AuditLogsModule } from './audit-logs/audit-logs.module';
 
 @Module({
   imports: [
@@ -20,6 +23,9 @@ import { GoodsReceiptsModule } from './goods-receipts/goods-receipts.module';
     PurchaseOrdersModule,
     ImportsModule.register(),
     GoodsReceiptsModule,
+    ExceptionsModule,
+    StockInspectionsModule,
+    AuditLogsModule,
   ],
 })
 export class AppModule {}

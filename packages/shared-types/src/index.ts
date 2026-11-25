@@ -75,6 +75,7 @@ export enum ExceptionCategory {
   MISSING_EVIDENCE = 'MISSING_EVIDENCE',
   LATE_DELIVERY = 'LATE_DELIVERY',
   INVENTORY_DISCREPANCY = 'INVENTORY_DISCREPANCY',
+  INVENTORY_VARIANCE = 'INVENTORY_VARIANCE',
 }
 
 export enum ExceptionSeverity {
@@ -87,8 +88,10 @@ export enum ExceptionSeverity {
 export enum ExceptionStatus {
   OPEN = 'OPEN',
   ASSIGNED = 'ASSIGNED',
+  INVESTIGATING = 'INVESTIGATING',
   UNDER_INVESTIGATION = 'UNDER_INVESTIGATION',
   RESOLVED = 'RESOLVED',
+  DISMISSED = 'DISMISSED',
   CLOSED = 'CLOSED',
   REOPENED = 'REOPENED',
 }
@@ -353,4 +356,105 @@ export interface ImportJobDto {
   errors?: ImportJobRowError[];
   createdAt: Date | string;
   updatedAt: Date | string;
+}
+
+// ============================================================================
+// Exceptions, Stock Inspections & Audit Logs Interfaces
+// ============================================================================
+
+export interface ExceptionAssignmentDto {
+  id: string;
+  exceptionId: string;
+  assignedTo: string;
+  assignedBy: string;
+  assignedAt: Date | string;
+  assignee?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+}
+
+export interface ExceptionCommentDto {
+  id: string;
+  exceptionId: string;
+  userId: string;
+  content: string;
+  createdAt: Date | string;
+  user?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+}
+
+export interface ExceptionResolutionDto {
+  id: string;
+  exceptionId: string;
+  resolvedBy: string;
+  resolutionType: ResolutionType | string;
+  resolutionNotes: string;
+  resolvedAt: Date | string;
+  resolver?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+}
+
+export interface ExceptionDto {
+  id: string;
+  organizationId: string;
+  exceptionNumber: string;
+  category: ExceptionCategory | string;
+  severity: ExceptionSeverity | string;
+  status: ExceptionStatus | string;
+  title: string;
+  description: string | null;
+  relatedRecordType: RelatedRecordType | string;
+  relatedRecordId: string;
+  detectedAt: Date | string;
+  resolvedAt: Date | string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  assignments?: ExceptionAssignmentDto[];
+  comments?: ExceptionCommentDto[];
+  resolution?: ExceptionResolutionDto | null;
+  relatedRecord?: Record<string, unknown> | null;
+}
+
+export interface StockInspectionDto {
+  id: string;
+  organizationId: string;
+  warehouseId: string;
+  productId: string;
+  recordedQuantity: number;
+  physicalQuantity: number;
+  /** variance = physicalQuantity - recordedQuantity */
+  variance: number;
+  performedBy: string;
+  status: StockInspectionStatus | string;
+  inspectedAt: Date | string;
+  createdAt: Date | string;
+  exceptionId?: string | null;
+}
+
+export interface AuditLogDto {
+  id: string;
+  organizationId: string;
+  actorUserId: string | null;
+  action: AuditAction | string;
+  entityType: string;
+  entityId: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: Date | string;
+  actor?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
 }
