@@ -3,8 +3,11 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.enableCors();
-  const port = process.env.PORT || 4000;
+  app.enableCors({
+    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    credentials: true,
+  });
+  const port = process.env.PORT || 3001;
   await app.listen(port);
   console.log(`OpsTrace API running on port ${port}`);
 }
