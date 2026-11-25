@@ -30,11 +30,11 @@ interface NavItem {
 
 const PRIMARY_NAV: NavItem[] = [
   { label: 'Overview', href: '/', icon: LayoutDashboard },
-  { label: 'Purchase Orders', href: '/purchase-orders', icon: FileText, badge: 'Soon' },
-  { label: 'Goods Receipts', href: '/goods-receipts', icon: PackageCheck, badge: 'Soon' },
-  { label: 'Exceptions', href: '/exceptions', icon: AlertTriangle, badge: 'Soon' },
+  { label: 'Purchase Orders', href: '/purchase-orders', icon: FileText },
+  { label: 'Goods Receipts', href: '/goods-receipts', icon: PackageCheck },
+  { label: 'Exceptions', href: '/exceptions', icon: AlertTriangle },
   { label: 'Stock Inspections', href: '/stock-inspections', icon: ClipboardCheck, badge: 'Soon' },
-  { label: 'Audit Logs', href: '/audit-logs', icon: History, badge: 'Soon' },
+  { label: 'Audit Logs', href: '/audit-logs', icon: History },
 ];
 
 const MASTER_DATA_NAV: NavItem[] = [
