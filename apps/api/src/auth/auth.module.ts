@@ -3,7 +3,6 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
-import { TenantContext } from '../prisma/tenant-context';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 
 /**
@@ -12,8 +11,8 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
  * JwtModule is configured async so ConfigService can inject
  * the JWT_SECRET from the environment file at runtime.
  *
- * TenantContext and JwtAuthGuard are provided here because they depend on
- * JwtService; other modules that need JwtAuthGuard should import AuthModule.
+ * JwtAuthGuard is provided here because it depends on JwtService;
+ * other modules that need JwtAuthGuard should import AuthModule.
  */
 @Module({
   imports: [
@@ -27,8 +26,8 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
       }),
     }),
   ],
-  providers: [AuthService, TenantContext, JwtAuthGuard],
+  providers: [AuthService, JwtAuthGuard],
   controllers: [AuthController],
-  exports: [AuthService, JwtModule, TenantContext, JwtAuthGuard],
+  exports: [AuthService, JwtModule, JwtAuthGuard],
 })
 export class AuthModule {}

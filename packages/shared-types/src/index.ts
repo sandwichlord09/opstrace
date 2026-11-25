@@ -165,3 +165,55 @@ export interface DiscrepancyCalculationResult {
   discrepancyPercentage: number;
   notes: string;
 }
+
+// ============================================================================
+// Master Data & Pagination Interfaces
+// ============================================================================
+
+export interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  meta: PaginationMeta;
+}
+
+export interface WarehouseDto {
+  id: string;
+  organizationId: string;
+  name: string;
+  code: string;
+  address: string | null;
+  status: WarehouseStatus | string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+export interface ProductDto {
+  id: string;
+  organizationId: string;
+  sku: string;
+  name: string;
+  description: string | null;
+  barcode: string | null;
+  unitOfMeasure: string;
+  status: ProductStatus | string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+export interface SupplierDto {
+  id: string;
+  organizationId: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  status: SupplierStatus | string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}

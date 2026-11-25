@@ -1,14 +1,14 @@
 import { Global, Module } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
+import { TenantContext } from './tenant-context';
 
 /**
- * PrismaModule is marked @Global so PrismaService is available to every module
- * without explicitly importing it. The alternative — reimporting per module —
- * would create multiple connection pools and inconsistent tenant contexts.
+ * PrismaModule is marked @Global so PrismaService and TenantContext are
+ * available as singletons to every module without explicitly importing them.
  */
 @Global()
 @Module({
-  providers: [PrismaService],
-  exports: [PrismaService],
+  providers: [PrismaService, TenantContext],
+  exports: [PrismaService, TenantContext],
 })
 export class PrismaModule {}

@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { ResolutionType } from '@opstrace/shared-types';
+import {
+  ProductStatus,
+  ResolutionType,
+  SupplierStatus,
+  WarehouseStatus,
+} from '@opstrace/shared-types';
 
 // ============================================================================
 // Auth & Identity Validation Schemas
@@ -76,3 +81,111 @@ export const ResolveExceptionSchema = z.object({
 });
 
 export type ResolveExceptionInput = z.infer<typeof ResolveExceptionSchema>;
+
+// ============================================================================
+// Shared Pagination & Master Data Query Schemas
+// ============================================================================
+
+export const BasePaginationQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().max(100).optional(),
+});
+
+// ============================================================================
+// Warehouse Schemas
+// ============================================================================
+
+export const CreateWarehouseSchema = z.object({
+  name: z.string().trim().min(1, 'Warehouse name is required').max(255),
+  code: z
+    .string()
+    .trim()
+    .min(1, 'Warehouse code is required')
+    .max(50)
+    .regex(/^[A-Za-z0-9_-]+$/, 'Code must contain only letters, numbers, hyphens, or underscores'),
+  address: z.string().trim().max(500).optional(),
+});
+
+export type CreateWarehouseInput = z.infer<typeof CreateWarehouseSchema>;
+
+export const UpdateWarehouseSchema = z.object({
+  name: z.string().trim().min(1).max(255).optional(),
+  code: z
+    .string()
+    .trim()
+    .min(1)
+    .max(50)
+    .regex(/^[A-Za-z0-9_-]+$/, 'Code must contain only letters, numbers, hyphens, or underscores')
+    .optional(),
+  address: z.string().trim().max(500).nullable().optional(),
+  status: z.nativeEnum(WarehouseStatus).optional(),
+});
+
+export type UpdateWarehouseInput = z.infer<typeof UpdateWarehouseSchema>;
+
+export const WarehouseQuerySchema = BasePaginationQuerySchema.extend({
+  status: z.nativeEnum(WarehouseStatus).optional(),
+});
+
+export type WarehouseQueryInput = z.infer<typeof WarehouseQuerySchema>;
+
+// ============================================================================
+// Product Schemas
+// ============================================================================
+
+export const CreateProductSchema = z.object({
+  sku: z.string().trim().min(1, 'SKU is required').max(100),
+  name: z.string().trim().min(1, 'Product name is required').max(255),
+  description: z.string().trim().max(2000).optional(),
+  barcode: z.string().trim().max(100).optional(),
+  unitOfMeasure: z.string().trim().min(1).max(50).default('PIECE'),
+});
+
+export type CreateProductInput = z.infer<typeof CreateProductSchema>;
+
+export const UpdateProductSchema = z.object({
+  sku: z.string().trim().min(1).max(100).optional(),
+  name: z.string().trim().min(1).max(255).optional(),
+  description: z.string().trim().max(2000).nullable().optional(),
+  barcode: z.string().trim().max(100).nullable().optional(),
+  unitOfMeasure: z.string().trim().min(1).max(50).optional(),
+  status: z.nativeEnum(ProductStatus).optional(),
+});
+
+export type UpdateProductInput = z.infer<typeof UpdateProductSchema>;
+
+export const ProductQuerySchema = BasePaginationQuerySchema.extend({
+  status: z.nativeEnum(ProductStatus).optional(),
+});
+
+export type ProductQueryInput = z.infer<typeof ProductQuerySchema>;
+
+// ============================================================================
+// Supplier Schemas
+// ============================================================================
+
+export const CreateSupplierSchema = z.object({
+  name: z.string().trim().min(1, 'Supplier name is required').max(255),
+  email: z.string().trim().email('Invalid supplier email').max(255).optional(),
+  phone: z.string().trim().max(50).optional(),
+  address: z.string().trim().max(500).optional(),
+});
+
+export type CreateSupplierInput = z.infer<typeof CreateSupplierSchema>;
+
+export const UpdateSupplierSchema = z.object({
+  name: z.string().trim().min(1).max(255).optional(),
+  email: z.string().trim().email('Invalid supplier email').max(255).nullable().optional(),
+  phone: z.string().trim().max(50).nullable().optional(),
+  address: z.string().trim().max(500).nullable().optional(),
+  status: z.nativeEnum(SupplierStatus).optional(),
+});
+
+export type UpdateSupplierInput = z.infer<typeof UpdateSupplierSchema>;
+
+export const SupplierQuerySchema = BasePaginationQuerySchema.extend({
+  status: z.nativeEnum(SupplierStatus).optional(),
+});
+
+export type SupplierQueryInput = z.infer<typeof SupplierQuerySchema>;

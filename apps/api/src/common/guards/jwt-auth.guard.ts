@@ -112,15 +112,10 @@ export class JwtAuthGuard implements CanActivate {
     // Attach to req.user for the @CurrentUser() decorator
     request.user = userContext;
 
-    // Run the downstream handler inside the TenantContext so all services
-    // in this request can call tenantContext.getOrganizationId() safely.
-    return new Promise((resolve) => {
-      this.tenantContext.run(userContext, () => {
-        // We resolve true so NestJS proceeds to the route handler.
-        // The route handler also runs inside this same ALS context.
-        resolve(true);
-      });
-    });
+    // Enter the TenantContext for the remainder of this HTTP request so all
+    // downstream services can call tenantContext.getOrganizationId() safely.
+    this.tenantContext.enter(userContext);
+    return true;
   }
 
   private extractBearerToken(authHeader?: string): string | null {

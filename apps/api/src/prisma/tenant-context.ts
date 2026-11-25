@@ -38,6 +38,14 @@ export class TenantContext {
   }
 
   /**
+   * Transitions the current async execution context into the given UserContext
+   * for the remainder of the HTTP request lifecycle.
+   */
+  enter(userContext: UserContext): void {
+    this.storage.enterWith(userContext);
+  }
+
+  /**
    * Returns the current user context, or undefined if called outside a
    * request (e.g., from background jobs or tests that set up context manually).
    */
