@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   ProductStatus,
+  PurchaseOrderStatus,
   ResolutionType,
   SupplierStatus,
   WarehouseStatus,
@@ -189,3 +190,94 @@ export const SupplierQuerySchema = BasePaginationQuerySchema.extend({
 });
 
 export type SupplierQueryInput = z.infer<typeof SupplierQuerySchema>;
+
+// ============================================================================
+// Purchase Order Schemas
+// ============================================================================
+
+export const PurchaseOrderItemInputSchema = z.object({
+  productId: z.string().uuid('Product ID must be a valid UUID'),
+  orderedQuantity: z
+    .number()
+    .int('Ordered quantity must be a whole integer')
+    .positive('Ordered quantity must be greater than 0'),
+  unitPrice: z
+    .union([
+      z.number().nonnegative('Unit price cannot be negative'),
+      z
+        .string()
+        .trim()
+        .regex(
+          /^\d+(\.\d{1,2})?$/,
+          'Unit price must be a non-negative decimal with up to 2 decimal places',
+        ),
+    ])
+    .transform((val) => Number(val).toFixed(2)),
+});
+
+export type PurchaseOrderItemInput = z.infer<typeof PurchaseOrderItemInputSchema>;
+
+export const CreatePurchaseOrderSchema = z.object({
+  supplierId: z.string().uuid('Supplier ID must be a valid UUID'),
+  warehouseId: z.string().uuid('Warehouse ID must be a valid UUID'),
+  poNumber: z.string().trim().min(1, 'PO number is required').max(100),
+  orderDate: z.coerce.date(),
+  expectedDeliveryDate: z.coerce.date().optional(),
+  status: z
+    .enum([PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.ISSUED])
+    .default(PurchaseOrderStatus.DRAFT),
+  items: z
+    .array(PurchaseOrderItemInputSchema)
+    .min(1, 'Purchase order must contain at least one line item'),
+});
+
+export type CreatePurchaseOrderInput = z.infer<typeof CreatePurchaseOrderSchema>;
+
+export const UpdatePurchaseOrderSchema = z.object({
+  expectedDeliveryDate: z.coerce.date().nullable().optional(),
+  items: z
+    .array(PurchaseOrderItemInputSchema)
+    .min(1, 'Purchase order must contain at least one line item')
+    .optional(),
+});
+
+export type UpdatePurchaseOrderInput = z.infer<typeof UpdatePurchaseOrderSchema>;
+
+export const PurchaseOrderQuerySchema = BasePaginationQuerySchema.extend({
+  status: z.nativeEnum(PurchaseOrderStatus).optional(),
+  warehouseId: z.string().uuid().optional(),
+  supplierId: z.string().uuid().optional(),
+});
+
+export type PurchaseOrderQueryInput = z.infer<typeof PurchaseOrderQuerySchema>;
+
+// ============================================================================
+// CSV Bulk Import Row Schemas
+// ============================================================================
+
+export const CsvPurchaseOrderRowSchema = z.object({
+  poNumber: z.string().trim().min(1, 'po_number is required').max(100),
+  supplierName: z.string().trim().min(1, 'supplier_name is required').max(255),
+  warehouseCode: z.string().trim().min(1, 'warehouse_code is required').max(50),
+  orderDate: z.coerce.date(),
+  expectedDeliveryDate: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? undefined : val),
+    z.coerce.date().optional(),
+  ),
+  sku: z.string().trim().min(1, 'sku is required').max(100),
+  orderedQuantity: z.coerce
+    .number()
+    .int('ordered_quantity must be an integer')
+    .positive('ordered_quantity must be greater than 0'),
+  unitPrice: z
+    .union([
+      z.coerce.number().nonnegative('unit_price cannot be negative'),
+      z
+        .string()
+        .trim()
+        .regex(/^\d+(\.\d{1,2})?$/, 'unit_price must be a non-negative decimal'),
+    ])
+    .transform((val) => Number(val).toFixed(2)),
+});
+
+export type CsvPurchaseOrderRowInput = z.infer<typeof CsvPurchaseOrderRowSchema>;

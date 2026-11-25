@@ -217,3 +217,76 @@ export interface SupplierDto {
   createdAt: Date | string;
   updatedAt: Date | string;
 }
+
+// ============================================================================
+// Purchase Orders & CSV Imports Interfaces
+// ============================================================================
+
+export interface PurchaseOrderSummaryMetrics {
+  ordered: number;
+  received: number;
+  damaged: number;
+  accepted: number;
+  outstanding: number;
+}
+
+export interface PurchaseOrderItemDto {
+  id: string;
+  purchaseOrderId: string;
+  productId: string;
+  orderedQuantity: number;
+  unitPrice: string;
+  product?: {
+    id: string;
+    sku: string;
+    name: string;
+    unitOfMeasure: string;
+    barcode: string | null;
+  };
+}
+
+export interface PurchaseOrderDto {
+  id: string;
+  organizationId: string;
+  supplierId: string;
+  warehouseId: string;
+  poNumber: string;
+  orderDate: Date | string;
+  expectedDeliveryDate: Date | string | null;
+  status: PurchaseOrderStatus | string;
+  createdBy: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  supplier?: {
+    id: string;
+    name: string;
+  };
+  warehouse?: {
+    id: string;
+    name: string;
+    code: string;
+  };
+  items?: PurchaseOrderItemDto[];
+  summary?: PurchaseOrderSummaryMetrics;
+}
+
+export interface ImportJobRowError {
+  rowNumber: number;
+  poNumber?: string;
+  sku?: string;
+  errors: string[];
+}
+
+export interface ImportJobDto {
+  id: string;
+  organizationId: string;
+  uploadedBy: string;
+  fileName: string;
+  status: ImportJobStatus | string;
+  totalRows: number;
+  successfulRows: number;
+  failedRows: number;
+  errors?: ImportJobRowError[];
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
