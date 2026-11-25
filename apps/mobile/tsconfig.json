@@ -3,7 +3,15 @@
   "compilerOptions": {
     "jsx": "react-native",
     "moduleResolution": "bundler",
-    "module": "ESNext"
+    "module": "ESNext",
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": ["**/*.ts", "**/*.tsx"]
 }
