@@ -1,0 +1,23 @@
+{
+  "name": "opstrace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpsTrace - Operational Discrepancy and Evidence Management Platform",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "test": "pnpm -r run test",
+    "api:dev": "pnpm --filter @opstrace/api dev",
+    "web:dev": "pnpm --filter @opstrace/web dev",
+    "db:generate": "pnpm --filter @opstrace/api db:generate",
+    "db:validate": "pnpm --filter @opstrace/api db:validate",
+    "db:migrate": "pnpm --filter @opstrace/api db:migrate"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

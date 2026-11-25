@@ -1,0 +1,552 @@
+// ==============================================================================
+// OpsTrace Core Relational Schema
+// Multi-Tenant Operational Discrepancy and Evidence Management Platform
+// Database: PostgreSQL 16 | ORM: Prisma
+// ==============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==============================================================================
+// PART 1: IDENTITY & ROLE-BASED ACCESS CONTROL (RBAC)
+// ==============================================================================
+
+/// Organizations represent isolated business tenants (e.g. distribution companies).
+/// Every operational record belongs to an organization to ensure strict data separation.
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(255)
+  slug      String   @unique @db.VarChar(100)
+  industry  String?  @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  memberships        Membership[]
+  roles              Role[]
+  warehouses         Warehouse[]
+  products           Product[]
+  suppliers          Supplier[]
+  purchaseOrders     PurchaseOrder[]
+  goodsReceipts      GoodsReceipt[]
+  inventorySnapshots InventorySnapshot[]
+  stockInspections   StockInspection[]
+  exceptions         Exception[]
+  attachments        Attachment[]
+  auditLogs          AuditLog[]
+  importJobs         ImportJob[]
+  syncOperations     SyncOperation[]
+
+  @@map("organizations")
+}
+
+/// Global user registry. Authentication is handled globally, while authorization
+/// is scoped per-tenant via the memberships model.
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  firstName    String   @map("first_name") @db.VarChar(100)
+  lastName     String   @map("last_name") @db.VarChar(100)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  memberships              Membership[]
+  createdPurchaseOrders    PurchaseOrder[]       @relation("POCreatedBy")
+  receivedGoodsReceipts    GoodsReceipt[]        @relation("GRReceivedBy")
+  performedInspections     StockInspection[]     @relation("InspectionPerformedBy")
+  assignedToExceptions     ExceptionAssignment[] @relation("ExceptionAssignedTo")
+  assignedByExceptions     ExceptionAssignment[] @relation("ExceptionAssignedBy")
+  exceptionComments        ExceptionComment[]
+  exceptionResolutions     ExceptionResolution[] @relation("ExceptionResolvedBy")
+  uploadedAttachments      Attachment[]          @relation("AttachmentUploadedBy")
+  auditLogs                AuditLog[]            @relation("AuditActor")
+  uploadedImportJobs       ImportJob[]           @relation("ImportUploadedBy")
+  syncOperations           SyncOperation[]
+
+  @@map("users")
+}
+
+/// Links a user to an organization with a specific role.
+/// Enforces single active membership per user per organization.
+model Membership {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  roleId         String   @map("role_id") @db.Uuid
+  status         String   @default("ACTIVE") @db.VarChar(50) // ACTIVE, INVITED, SUSPENDED
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  // WHY THIS CONSTRAINT EXISTS:
+  // A user can only belong to a specific tenant once. Changing access means updating the role.
+  @@unique([organizationId, userId], name: "uq_memberships_org_user")
+  // WHY THIS INDEX EXISTS:
+  // Fast tenant-level membership queries and user lookups within an organization.
+  @@index([organizationId, status], name: "idx_memberships_org_status")
+  @@map("memberships")
+}
+
+/// Roles define sets of permissions. System-wide roles have organizationId = null,
+/// while custom roles belong to a specific organization.
+model Role {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String?  @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(100)
+  description    String?  @db.VarChar(255)
+
+  organization    Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships     Membership[]
+  rolePermissions RolePermission[]
+
+  // WHY THIS INDEX EXISTS:
+  // Fast lookup for tenant-defined roles alongside global system roles (where organization_id IS NULL).
+  @@index([organizationId], name: "idx_roles_org")
+  @@map("roles")
+}
+
+/// Granular functional permission keys (e.g., 'po:create', 'receipt:submit', 'exception:resolve').
+model Permission {
+  id          String  @id @default(uuid()) @db.Uuid
+  key         String  @unique @db.VarChar(100)
+  description String? @db.VarChar(255)
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+/// Many-to-many junction between roles and granular permissions.
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ==============================================================================
+// PART 2: MASTER DATA (WAREHOUSES, PRODUCTS, SUPPLIERS)
+// ==============================================================================
+
+/// Physical warehouses or fulfillment centers where goods are received and inspected.
+model Warehouse {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(255)
+  code           String   @db.VarChar(50)
+  address        String?  @db.VarChar(500)
+  status         String   @default("ACTIVE") @db.VarChar(50) // ACTIVE, INACTIVE
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  purchaseOrders     PurchaseOrder[]
+  goodsReceipts      GoodsReceipt[]
+  inventorySnapshots InventorySnapshot[]
+  stockInspections   StockInspection[]
+
+  // WHY THIS CONSTRAINT EXISTS:
+  // Warehouse code (e.g. 'WH-CEBU-01') must be unique within an organization to prevent routing confusion.
+  @@unique([organizationId, code], name: "uq_warehouses_org_code")
+  // WHY THIS INDEX EXISTS:
+  // Multi-tenant filtering by tenant and active status.
+  @@index([organizationId, status], name: "idx_warehouses_org_status")
+  @@map("warehouses")
+}
+
+/// Stock Keeping Units (SKUs) cataloged within an organization.
+model Product {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  sku            String   @db.VarChar(100)
+  name           String   @db.VarChar(255)
+  description    String?  @db.Text
+  barcode        String?  @db.VarChar(100)
+  unitOfMeasure  String   @default("PIECE") @map("unit_of_measure") @db.VarChar(50)
+  status         String   @default("ACTIVE") @db.VarChar(50) // ACTIVE, DISCONTINUED
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  purchaseOrderItems PurchaseOrderItem[]
+  goodsReceiptItems  GoodsReceiptItem[]
+  inventorySnapshots InventorySnapshot[]
+  stockInspections   StockInspection[]
+
+  // WHY THIS CONSTRAINT EXISTS:
+  // SKU is the immutable business identifier per product within an organization.
+  @@unique([organizationId, sku], name: "uq_products_org_sku")
+  // WHY THESE INDEXES EXIST:
+  // Fast barcode lookup from mobile camera scanners and tenant catalog browsing.
+  @@index([organizationId, barcode], name: "idx_products_org_barcode")
+  @@index([organizationId, status], name: "idx_products_org_status")
+  @@map("products")
+}
+
+/// Suppliers/Vendors from whom goods are purchased.
+model Supplier {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(255)
+  email          String?  @db.VarChar(255)
+  phone          String?  @db.VarChar(50)
+  address        String?  @db.VarChar(500)
+  status         String   @default("ACTIVE") @db.VarChar(50) // ACTIVE, INACTIVE
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  purchaseOrders PurchaseOrder[]
+
+  // WHY THIS INDEX EXISTS:
+  // Fast filtering of suppliers per organization in procurement dashboards.
+  @@index([organizationId, status], name: "idx_suppliers_org_status")
+  @@map("suppliers")
+}
+
+// ==============================================================================
+// PART 3: OPERATIONS (PURCHASE ORDERS, GOODS RECEIPTS, INVENTORY)
+// ==============================================================================
+
+/// Purchase orders record expected inbound shipments from suppliers.
+model PurchaseOrder {
+  id                   String    @id @default(uuid()) @db.Uuid
+  organizationId       String    @map("organization_id") @db.Uuid
+  supplierId           String    @map("supplier_id") @db.Uuid
+  warehouseId          String    @map("warehouse_id") @db.Uuid
+  poNumber             String    @map("po_number") @db.VarChar(100)
+  orderDate            DateTime  @map("order_date") @db.Date
+  expectedDeliveryDate DateTime? @map("expected_delivery_date") @db.Date
+  status               String    @default("ISSUED") @db.VarChar(50) // DRAFT, ISSUED, PARTIALLY_RECEIVED, COMPLETED, CANCELLED
+  createdBy            String    @map("created_by") @db.Uuid
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplier     Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  warehouse    Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  creator      User                @relation("POCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  items        PurchaseOrderItem[]
+  goodsReceipts GoodsReceipt[]
+
+  // WHY THIS CONSTRAINT EXISTS:
+  // Prevents duplicate purchase order numbers within the same organization.
+  @@unique([organizationId, poNumber], name: "uq_purchase_orders_org_po_number")
+  // WHY THIS INDEX EXISTS:
+  // Optimizes the most frequent query: filtering open POs by status for a warehouse.
+  @@index([organizationId, warehouseId, status], name: "idx_po_org_wh_status")
+  @@map("purchase_orders")
+}
+
+/// Line items specifying quantities and contracted prices for each ordered product.
+model PurchaseOrderItem {
+  id              String  @id @default(uuid()) @db.Uuid
+  purchaseOrderId String  @map("purchase_order_id") @db.Uuid
+  productId       String  @map("product_id") @db.Uuid
+  orderedQuantity Int     @map("ordered_quantity")
+  unitPrice       Decimal @map("unit_price") @db.Decimal(12, 2)
+
+  purchaseOrder     PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product           Product            @relation(fields: [productId], references: [id], onDelete: Restrict)
+  goodsReceiptItems GoodsReceiptItem[]
+
+  // WHY THIS CONSTRAINT EXISTS:
+  // An item can only appear once per PO; multiple quantities belong on that line.
+  @@unique([purchaseOrderId, productId], name: "uq_po_item_po_product")
+  // WHY THIS INDEX EXISTS:
+  // Fast join during reconciliation when matching actual received items against PO lines.
+  @@index([purchaseOrderId], name: "idx_po_items_po_id")
+  @@map("purchase_order_items")
+}
+
+/// Actual physical receiving transaction recorded by warehouse workers on mobile.
+model GoodsReceipt {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  purchaseOrderId String    @map("purchase_order_id") @db.Uuid
+  warehouseId     String    @map("warehouse_id") @db.Uuid
+  receivedBy      String    @map("received_by") @db.Uuid
+  receiptNumber   String    @map("receipt_number") @db.VarChar(100)
+  status          String    @default("IN_PROGRESS") @db.VarChar(50) // IN_PROGRESS, SUBMITTED, RECONCILED
+  receivedAt      DateTime  @default(now()) @map("received_at") @db.Timestamptz(6)
+  submittedAt     DateTime? @map("submitted_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization  Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  purchaseOrder PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  warehouse     Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  receiver      User               @relation("GRReceivedBy", fields: [receivedBy], references: [id], onDelete: Restrict)
+  items         GoodsReceiptItem[]
+
+  // WHY THIS CONSTRAINT EXISTS:
+  // Receipt number must be globally unique per organization to guarantee distinct delivery tickets.
+  @@unique([organizationId, receiptNumber], name: "uq_goods_receipts_org_receipt_number")
+  // WHY THIS INDEX EXISTS:
+  // Enables rapid lookup of all receipts logged against a specific PO during reconciliation.
+  @@index([organizationId, purchaseOrderId], name: "idx_gr_org_po")
+  @@index([organizationId, status], name: "idx_gr_org_status")
+  @@map("goods_receipts")
+}
+
+/// Individual items physically counted and condition-checked upon delivery.
+model GoodsReceiptItem {
+  id                  String  @id @default(uuid()) @db.Uuid
+  goodsReceiptId      String  @map("goods_receipt_id") @db.Uuid
+  purchaseOrderItemId String  @map("purchase_order_item_id") @db.Uuid
+  productId           String  @map("product_id") @db.Uuid
+  receivedQuantity    Int     @map("received_quantity")
+  damagedQuantity     Int     @default(0) @map("damaged_quantity")
+  notes               String? @db.Text
+
+  goodsReceipt      GoodsReceipt      @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  purchaseOrderItem PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id], onDelete: Restrict)
+  product           Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  // WHY THIS INDEX EXISTS:
+  // Fast aggregation of received vs ordered quantities across multiple delivery batches.
+  @@index([goodsReceiptId], name: "idx_gr_items_gr_id")
+  @@index([purchaseOrderItemId], name: "idx_gr_items_po_item_id")
+  @@map("goods_receipt_items")
+}
+
+/// Point-in-time recorded inventory quantity used as reference baseline for audits.
+model InventorySnapshot {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  warehouseId     String   @map("warehouse_id") @db.Uuid
+  productId       String   @map("product_id") @db.Uuid
+  quantity        Int
+  recordedAt      DateTime @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  sourceReference String?  @map("source_reference") @db.VarChar(100)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  warehouse    Warehouse    @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  // WHY THIS INDEX EXISTS:
+  // Essential for the reconciliation engine to retrieve the latest inventory snapshot for a SKU at a warehouse.
+  @@index([organizationId, warehouseId, productId, recordedAt(sort: Desc)], name: "idx_inv_snap_org_wh_prod_date")
+  @@map("inventory_snapshots")
+}
+
+/// Physical counts conducted by warehouse workers compared against system snapshots.
+model StockInspection {
+  id               String   @id @default(uuid()) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  warehouseId      String   @map("warehouse_id") @db.Uuid
+  productId        String   @map("product_id") @db.Uuid
+  recordedQuantity Int      @map("recorded_quantity")
+  physicalQuantity Int      @map("physical_quantity")
+  difference       Int // physicalQuantity - recordedQuantity
+  performedBy      String   @map("performed_by") @db.Uuid
+  status           String   @default("PENDING_REVIEW") @db.VarChar(50) // PENDING_REVIEW, ACCEPTED, DISCREPANCY_FLAGGED
+  inspectedAt      DateTime @default(now()) @map("inspected_at") @db.Timestamptz(6)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  warehouse    Warehouse    @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+  inspector    User         @relation("InspectionPerformedBy", fields: [performedBy], references: [id], onDelete: Restrict)
+
+  // WHY THIS INDEX EXISTS:
+  // Quick inspection history retrieval per warehouse and status (e.g. flagging unresolved discrepancies).
+  @@index([organizationId, warehouseId, status], name: "idx_stock_insp_org_wh_status")
+  @@map("stock_inspections")
+}
+
+// ==============================================================================
+// PART 4: DISCREPANCIES & EXCEPTIONS
+// ==============================================================================
+
+/// Discrepancy generated deterministically when actual operations diverge from expected records.
+model Exception {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  exceptionNumber   String    @map("exception_number") @db.VarChar(100)
+  category          String    @db.VarChar(50) // QUANTITY_MISMATCH, DAMAGED_GOODS, UNEXPECTED_ITEM, etc.
+  severity          String    @default("MEDIUM") @db.VarChar(20) // LOW, MEDIUM, HIGH, CRITICAL
+  status            String    @default("OPEN") @db.VarChar(50) // OPEN, ASSIGNED, UNDER_INVESTIGATION, RESOLVED, CLOSED
+  title             String    @db.VarChar(255)
+  description       String?   @db.Text
+  relatedRecordType String    @map("related_record_type") @db.VarChar(50) // PURCHASE_ORDER, GOODS_RECEIPT, STOCK_INSPECTION
+  relatedRecordId   String    @map("related_record_id") @db.Uuid
+  detectedAt        DateTime  @default(now()) @map("detected_at") @db.Timestamptz(6)
+  resolvedAt        DateTime? @map("resolved_at") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignments  ExceptionAssignment[]
+  comments     ExceptionComment[]
+  resolution   ExceptionResolution?
+
+  // WHY THIS CONSTRAINT EXISTS:
+  // Discrepancy ticket identifier (e.g., 'EX-2026-0001') must be unique within an organization.
+  @@unique([organizationId, exceptionNumber], name: "uq_exceptions_org_number")
+  // WHY THIS INDEX EXISTS:
+  // Fast querying for Ops Manager dashboards: list open exceptions sorted by severity and detection date.
+  @@index([organizationId, status, severity], name: "idx_exceptions_org_status_severity")
+  @@index([organizationId, relatedRecordType, relatedRecordId], name: "idx_exceptions_related_record")
+  @@map("exceptions")
+}
+
+/// Tracks assigning investigation responsibility to a team member.
+model ExceptionAssignment {
+  id          String   @id @default(uuid()) @db.Uuid
+  exceptionId String   @map("exception_id") @db.Uuid
+  assignedTo  String   @map("assigned_to") @db.Uuid
+  assignedBy  String   @map("assigned_by") @db.Uuid
+  assignedAt  DateTime @default(now()) @map("assigned_at") @db.Timestamptz(6)
+
+  exception Exception @relation(fields: [exceptionId], references: [id], onDelete: Cascade)
+  assignee  User      @relation("ExceptionAssignedTo", fields: [assignedTo], references: [id], onDelete: Restrict)
+  assigner  User      @relation("ExceptionAssignedBy", fields: [assignedBy], references: [id], onDelete: Restrict)
+
+  // WHY THIS INDEX EXISTS:
+  // Fast lookup of investigation tasks assigned to a specific warehouse worker or supervisor.
+  @@index([exceptionId], name: "idx_exc_assign_exception_id")
+  @@index([assignedTo], name: "idx_exc_assign_assigned_to")
+  @@map("exception_assignments")
+}
+
+/// Threaded investigation discussions, notes, and evidence findings.
+model ExceptionComment {
+  id          String   @id @default(uuid()) @db.Uuid
+  exceptionId String   @map("exception_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  content     String   @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  exception Exception @relation(fields: [exceptionId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  // WHY THIS INDEX EXISTS:
+  // Loads all chronological comments for an exception investigation thread.
+  @@index([exceptionId, createdAt], name: "idx_exc_comments_timeline")
+  @@map("exception_comments")
+}
+
+/// Authoritative formal resolution of an operational discrepancy approved by management.
+model ExceptionResolution {
+  id              String   @id @default(uuid()) @db.Uuid
+  exceptionId     String   @unique @map("exception_id") @db.Uuid
+  resolvedBy      String   @map("resolved_by") @db.Uuid
+  resolutionType  String   @map("resolution_type") @db.VarChar(100) // SUPPLIER_SHORT_SHIPMENT_ACCEPTED, INVENTORY_ADJUSTED, etc.
+  resolutionNotes String   @map("resolution_notes") @db.Text
+  resolvedAt      DateTime @default(now()) @map("resolved_at") @db.Timestamptz(6)
+
+  exception Exception @relation(fields: [exceptionId], references: [id], onDelete: Cascade)
+  resolver  User      @relation("ExceptionResolvedBy", fields: [resolvedBy], references: [id], onDelete: Restrict)
+
+  @@map("exception_resolutions")
+}
+
+// ==============================================================================
+// PART 5: SUPPORTING TABLES (ATTACHMENTS, AUDIT, IMPORTS, SYNC)
+// ==============================================================================
+
+/// Media evidence (photos of damaged goods, scanned bills of lading) stored in MinIO.
+model Attachment {
+  id                String   @id @default(uuid()) @db.Uuid
+  organizationId    String   @map("organization_id") @db.Uuid
+  uploadedBy        String   @map("uploaded_by") @db.Uuid
+  relatedRecordType String   @map("related_record_type") @db.VarChar(50) // GOODS_RECEIPT, EXCEPTION, STOCK_INSPECTION
+  relatedRecordId   String   @map("related_record_id") @db.Uuid
+  storageKey        String   @map("storage_key") @db.VarChar(500)
+  fileName          String   @map("file_name") @db.VarChar(255)
+  mimeType          String   @map("mime_type") @db.VarChar(100)
+  fileSize          Int      @map("file_size")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploader     User         @relation("AttachmentUploadedBy", fields: [uploadedBy], references: [id], onDelete: Restrict)
+
+  // WHY THIS INDEX EXISTS:
+  // Instant retrieval of all photographic evidence associated with an exception or receipt.
+  @@index([organizationId, relatedRecordType, relatedRecordId], name: "idx_attachments_record")
+  @@map("attachments")
+}
+
+/// Immutable audit trail tracking every write operation for enterprise compliance.
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
+  action         String   @db.VarChar(50) // CREATE, UPDATE, DELETE, RECONCILE, RESOLVE
+  entityType     String   @map("entity_type") @db.VarChar(50) // PurchaseOrder, GoodsReceipt, Exception
+  entityId       String   @map("entity_id") @db.Uuid
+  metadata       Json?    @db.JsonB
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User?        @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  // WHY THIS INDEX EXISTS:
+  // Enables auditors to review forensic history scoped to a tenant and filtered by entity or actor.
+  @@index([organizationId, entityType, entityId], name: "idx_audit_org_entity")
+  @@index([organizationId, createdAt(sort: Desc)], name: "idx_audit_org_created")
+  @@map("audit_logs")
+}
+
+/// Bulk CSV/Excel batch upload status and error accounting.
+model ImportJob {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  uploadedBy     String   @map("uploaded_by") @db.Uuid
+  fileName       String   @map("file_name") @db.VarChar(255)
+  status         String   @default("PENDING") @db.VarChar(50) // PENDING, PROCESSING, COMPLETED, FAILED
+  totalRows      Int      @default(0) @map("total_rows")
+  successfulRows Int      @default(0) @map("successful_rows")
+  failedRows     Int      @default(0) @map("failed_rows")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploader     User         @relation("ImportUploadedBy", fields: [uploadedBy], references: [id], onDelete: Restrict)
+
+  // WHY THIS INDEX EXISTS:
+  // Fast polling of active batch imports per organization.
+  @@index([organizationId, status], name: "idx_import_jobs_org_status")
+  @@map("import_jobs")
+}
+
+/// Offline synchronization ledger ensuring mobile submissions are idempotent and deduplicated.
+model SyncOperation {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  idempotencyKey String    @map("idempotency_key") @db.VarChar(255)
+  operationType  String    @map("operation_type") @db.VarChar(50) // GOODS_RECEIPT_SUBMIT, STOCK_INSPECTION_SUBMIT
+  status         String    @default("PENDING") @db.VarChar(50) // PENDING, COMPLETED, FAILED
+  serverRecordId String?   @map("server_record_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  // WHY THIS CONSTRAINT EXISTS:
+  // Crucial idempotency safeguard: if a mobile client retransmits after network dropout,
+  // the server detects this duplicate idempotency key and returns the existing result without duplicating records.
+  @@unique([organizationId, idempotencyKey], name: "uq_sync_org_idempotency_key")
+  // WHY THIS INDEX EXISTS:
+  // Fast status check during offline sync processing.
+  @@index([organizationId, userId, status], name: "idx_sync_org_user_status")
+  @@map("sync_operations")
+}

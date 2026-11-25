@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: opstrace-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-opstrace}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opstrace_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-opstracedb}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-opstrace} -d ${POSTGRES_DB:-opstracedb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: opstrace-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  s3:
+    image: chrislusf/seaweedfs:latest
+    container_name: opstrace-s3
+    restart: unless-stopped
+    command: "server -s3 -s3.port=9000 -dir=/data"
+    ports:
+      - "${S3_PORT:-9000}:9000"
+    volumes:
+      - s3_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:9000/ > /dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    name: opstrace_postgres_data
+  redis_data:
+    name: opstrace_redis_data
+  s3_data:
+    name: opstrace_s3_data
