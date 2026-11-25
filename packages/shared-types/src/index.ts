@@ -441,6 +441,22 @@ export interface StockInspectionDto {
   inspectedAt: Date | string;
   createdAt: Date | string;
   exceptionId?: string | null;
+  warehouse?: {
+    id: string;
+    name: string;
+    code: string;
+  };
+  product?: {
+    id: string;
+    sku: string;
+    name: string;
+  };
+  inspector?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
 }
 
 export interface AuditLogDto {

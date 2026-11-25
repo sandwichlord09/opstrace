@@ -281,12 +281,36 @@ export class StockInspectionsService {
         skip,
         take: limit,
         orderBy: { inspectedAt: 'desc' },
+        include: {
+          warehouse: { select: { id: true, name: true, code: true } },
+          product: { select: { id: true, sku: true, name: true } },
+          inspector: {
+            select: { id: true, firstName: true, lastName: true, email: true },
+          },
+        },
       }),
       this.prisma.stockInspection.count({ where }),
     ]);
 
+    const exceptionMap = new Map<string, string>();
+    if (data.length > 0) {
+      const linkedExceptions = await this.prisma.exception.findMany({
+        where: {
+          organizationId,
+          relatedRecordType: RelatedRecordType.STOCK_INSPECTION,
+          relatedRecordId: { in: data.map((row) => row.id) },
+        },
+        select: { id: true, relatedRecordId: true },
+      });
+      for (const exc of linkedExceptions) {
+        exceptionMap.set(exc.relatedRecordId, exc.id);
+      }
+    }
+
     return {
-      data: data.map((row) => this.mapToDto(row, null)),
+      data: data.map((row) =>
+        this.mapToDto(row, exceptionMap.get(row.id) ?? null),
+      ),
       meta: {
         page,
         limit,
@@ -309,6 +333,14 @@ export class StockInspectionsService {
       status: string;
       inspectedAt: Date;
       createdAt: Date;
+      warehouse?: { id: string; name: string; code: string };
+      product?: { id: string; sku: string; name: string };
+      inspector?: {
+        id: string;
+        firstName: string;
+        lastName: string;
+        email: string;
+      };
     },
     exceptionId: string | null,
   ): StockInspectionDto {
@@ -325,6 +357,9 @@ export class StockInspectionsService {
       inspectedAt: row.inspectedAt,
       createdAt: row.createdAt,
       ...(exceptionId !== null && { exceptionId }),
+      ...(row.warehouse && { warehouse: row.warehouse }),
+      ...(row.product && { product: row.product }),
+      ...(row.inspector && { inspector: row.inspector }),
     };
   }
 }

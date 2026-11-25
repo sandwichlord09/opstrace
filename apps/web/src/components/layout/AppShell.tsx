@@ -33,7 +33,7 @@ const PRIMARY_NAV: NavItem[] = [
   { label: 'Purchase Orders', href: '/purchase-orders', icon: FileText },
   { label: 'Goods Receipts', href: '/goods-receipts', icon: PackageCheck },
   { label: 'Exceptions', href: '/exceptions', icon: AlertTriangle },
-  { label: 'Stock Inspections', href: '/stock-inspections', icon: ClipboardCheck, badge: 'Soon' },
+  { label: 'Stock Inspections', href: '/stock-inspections', icon: ClipboardCheck },
   { label: 'Audit Logs', href: '/audit-logs', icon: History },
 ];
 
