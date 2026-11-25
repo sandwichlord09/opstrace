@@ -11,6 +11,9 @@ import { GoodsReceiptsModule } from './goods-receipts/goods-receipts.module';
 import { ExceptionsModule } from './exceptions/exceptions.module';
 import { StockInspectionsModule } from './stock-inspections/stock-inspections.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
+import { AttachmentsModule } from './attachments/attachments.module';
+import { SyncModule } from './sync/sync.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -26,6 +29,9 @@ import { AuditLogsModule } from './audit-logs/audit-logs.module';
     ExceptionsModule,
     StockInspectionsModule,
     AuditLogsModule,
+    AttachmentsModule,
+    SyncModule,
+    AnalyticsModule,
   ],
 })
 export class AppModule {}

@@ -6,6 +6,7 @@ import {
   ExceptionStatus,
   ProductStatus,
   PurchaseOrderStatus,
+  RelatedRecordType,
   ResolutionType,
   StockInspectionStatus,
   SupplierStatus,
@@ -350,3 +351,66 @@ export const CsvPurchaseOrderRowSchema = z.object({
 });
 
 export type CsvPurchaseOrderRowInput = z.infer<typeof CsvPurchaseOrderRowSchema>;
+
+// ============================================================================
+// Attachments, Offline Sync & Analytics Schemas
+// ============================================================================
+
+export const ALLOWED_ATTACHMENT_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+] as const;
+
+export const MAX_ATTACHMENT_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+export const PresignAttachmentSchema = z.object({
+  relatedRecordType: z.enum([
+    RelatedRecordType.GOODS_RECEIPT,
+    RelatedRecordType.STOCK_INSPECTION,
+    RelatedRecordType.EXCEPTION,
+    RelatedRecordType.PURCHASE_ORDER,
+  ]),
+  relatedRecordId: z.string().uuid('relatedRecordId must be a valid UUID'),
+  fileName: z.string().trim().min(1, 'File name is required').max(255),
+  mimeType: z.enum(ALLOWED_ATTACHMENT_MIME_TYPES, {
+    errorMap: () => ({
+      message: 'Only image uploads (jpeg, png, webp, heic, heif) are allowed',
+    }),
+  }),
+  fileSize: z
+    .number()
+    .int()
+    .positive('File size must be greater than 0')
+    .max(MAX_ATTACHMENT_FILE_SIZE_BYTES, 'File size cannot exceed 10 MB'),
+});
+
+export type PresignAttachmentInput = z.infer<typeof PresignAttachmentSchema>;
+
+export const BatchSyncReceivingSchema = z.object({
+  items: z
+    .array(SubmitGoodsReceiptSchema)
+    .min(1, 'At least one goods receipt is required')
+    .max(50, 'Maximum 50 receipts per batch'),
+});
+
+export type BatchSyncReceivingInput = z.infer<typeof BatchSyncReceivingSchema>;
+
+export const BatchSyncInspectionsSchema = z.object({
+  items: z
+    .array(SubmitStockInspectionSchema)
+    .min(1, 'At least one stock inspection is required')
+    .max(50, 'Maximum 50 inspections per batch'),
+});
+
+export type BatchSyncInspectionsInput = z.infer<typeof BatchSyncInspectionsSchema>;
+
+export const AnalyticsQuerySchema = z.object({
+  warehouseId: z.string().uuid().optional(),
+  fromDate: z.coerce.date().optional(),
+  toDate: z.coerce.date().optional(),
+});
+
+export type AnalyticsQueryInput = z.infer<typeof AnalyticsQuerySchema>;

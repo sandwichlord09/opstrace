@@ -109,6 +109,7 @@ export enum RelatedRecordType {
   PURCHASE_ORDER = 'PURCHASE_ORDER',
   GOODS_RECEIPT = 'GOODS_RECEIPT',
   STOCK_INSPECTION = 'STOCK_INSPECTION',
+  EXCEPTION = 'EXCEPTION',
   PRODUCT = 'PRODUCT',
   INVENTORY_SNAPSHOT = 'INVENTORY_SNAPSHOT',
 }
@@ -457,4 +458,96 @@ export interface AuditLogDto {
     lastName: string;
     email: string;
   } | null;
+}
+
+// ============================================================================
+// Attachments, Offline Sync & Analytics Interfaces
+// ============================================================================
+
+export interface AttachmentDto {
+  id: string;
+  organizationId: string;
+  uploadedBy: string;
+  relatedRecordType: RelatedRecordType | string;
+  relatedRecordId: string;
+  storageKey: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  createdAt: Date | string;
+}
+
+export interface PresignAttachmentResponseDto {
+  attachment: AttachmentDto;
+  uploadUrl: string;
+  expiresInSeconds: number;
+}
+
+export interface DownloadAttachmentUrlDto {
+  attachmentId: string;
+  downloadUrl: string;
+  expiresInSeconds: number;
+}
+
+export enum SyncBatchItemStatus {
+  SYNCED = 'SYNCED',
+  DUPLICATE_SKIPPED = 'DUPLICATE_SKIPPED',
+  FAILED = 'FAILED',
+}
+
+export interface SyncBatchItemResultDto<T> {
+  idempotencyKey: string;
+  status: SyncBatchItemStatus;
+  record?: T;
+  error?: string;
+}
+
+export interface SyncBatchResponseDto<T> {
+  total: number;
+  synced: number;
+  duplicatesSkipped: number;
+  failed: number;
+  results: SyncBatchItemResultDto<T>[];
+}
+
+export interface AnalyticsOverviewDto {
+  activePurchaseOrders: number;
+  openExceptionsBySeverity: {
+    LOW: number;
+    MEDIUM: number;
+    HIGH: number;
+    CRITICAL: number;
+    total: number;
+  };
+  totalReceivedUnits: number;
+  totalDamagedUnits: number;
+  stockAccuracyRate: number;
+}
+
+export interface SupplierDiscrepancyDto {
+  supplierId: string;
+  supplierName: string;
+  exceptionCount: number;
+}
+
+export interface WarehouseVarianceDto {
+  warehouseId: string;
+  warehouseName: string;
+  warehouseCode: string;
+  inspectionCount: number;
+  varianceCount: number;
+  totalAbsoluteVariance: number;
+}
+
+export interface ExceptionAgingBucketsDto {
+  under24h: number;
+  days1To3: number;
+  days3To7: number;
+  over7d: number;
+}
+
+export interface AnalyticsDiscrepanciesDto {
+  bySupplier: SupplierDiscrepancyDto[];
+  byWarehouse: WarehouseVarianceDto[];
+  exceptionAgingBuckets: ExceptionAgingBucketsDto;
 }
